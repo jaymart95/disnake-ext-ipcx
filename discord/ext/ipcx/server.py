@@ -3,7 +3,7 @@ from typing import Optional
 
 import aiohttp.web
 
-from discord.ext import commands
+from disnake.ext import commands
 
 from .errors import JSONEncodeError
 
@@ -59,7 +59,7 @@ class Server:
 
     Attributes
     ----------
-    bot: :class:`~discord.ext.commands.Bot`
+    bot: :class:`~disnake.ext.commands.Bot`
         Your bot instance. Subclassed bot instances should work as well.
     host: str
         The host to run the IPC Server on. Defaults to localhost.
@@ -146,7 +146,6 @@ class Server:
             log.debug("IPC Server < %r", request)
 
             endpoint = request.get("endpoint")
-
             headers = request.get("headers")
 
             if not headers or headers.get("Authorization") != self.secret_key:
@@ -167,16 +166,19 @@ class Server:
                 else:
                     server_response = IpcServerResponse(request)
                     try:
-                        attempted_cls = self.bot.cogs.get(
-                            self.endpoints[endpoint].__qualname__.split(".")[0]
-                        )
+                        plugin_name = self.endpoints[endpoint].__qualname__.split(".")[0]
+                        attempted_plugin = None
+                        
+                        for ext_name, ext in self.bot.extensions.items():
+                            if hasattr(ext, plugin_name):
+                                attempted_plugin = getattr(ext, plugin_name)
+                                break
 
-                        if attempted_cls:
-                            arguments = (attempted_cls, server_response)
+                        if attempted_plugin:
+                            arguments = (attempted_plugin, server_response)
                         else:
                             arguments = (server_response,)
                     except AttributeError:
-                        # Support base Client
                         arguments = (server_response,)
 
                     try:
@@ -206,7 +208,7 @@ class Server:
                 ):
                     error_response = (
                         "IPC route returned values which are not able to be sent over sockets."
-                        " If you are trying to send a discord.py object,"
+                        " If you are trying to send a disnake.py object,"
                         " please only send the data you need."
                     )
                     log.error(error_response)
